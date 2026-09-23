@@ -150,7 +150,7 @@ public class AddPayloads extends AbstractUserMessageHandler {
                     log.trace("Parse the XML from file so it can be added to SOAP body");
                     final OMXMLParserWrapper builder = OMXMLBuilderFactory.createOMBuilder(is);
                     final OMElement documentElement = builder.getDocumentElement();
-
+					documentElement.build();  // fully materialize deferred tree before `is` closes
                     // Check that reference and id are equal if both specified
                     final String href = p.getPayloadURI();
                     final String xmlId = documentElement.getAttributeValue(new QName("id"));
