@@ -18,6 +18,8 @@ package org.holodeckb2b.ebms3.handlers.outflow;
 
 import static org.holodeckb2b.interfaces.messagemodel.IPayload.Containment.ATTACHMENT;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.Collection;
 
@@ -146,11 +148,29 @@ public class AddPayloads extends AbstractUserMessageHandler {
                 return;
             case BODY :
                 log.trace("Adding payload to SOAP body");
-                try (InputStream is = p.getContent()) {
+                try {
+                    // Buffer the entire stream into memory first to avoid deferred parsing stream closure issues
+                    final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                    try (InputStream is = p.getContent()) {
+                        final byte[] temp = new byte[8192];
+                        int bytesRead;
+                        int totalBytes = 0;
+                        while ((bytesRead = is.read(temp)) != -1) {
+                            buffer.write(temp, 0, bytesRead);
+                            totalBytes += bytesRead;
+                        }
+                        log.trace("Buffered {} bytes from payload stream", totalBytes);
+                        if (totalBytes == 0) {
+                            log.warn("WARNING: Payload stream is empty!");
+                        }
+                    }
+                    
                     log.trace("Parse the XML from file so it can be added to SOAP body");
-                    final OMXMLParserWrapper builder = OMXMLBuilderFactory.createOMBuilder(is);
+                    // Parse from buffered bytes - no stream closure issues
+                    final ByteArrayInputStream bufferedInput = new ByteArrayInputStream(buffer.toByteArray());
+                    final OMXMLParserWrapper builder = OMXMLBuilderFactory.createOMBuilder(bufferedInput);
                     final OMElement documentElement = builder.getDocumentElement();
-					documentElement.build();  // fully materialize deferred tree before `is` closes
+
                     // Check that reference and id are equal if both specified
                     final String href = p.getPayloadURI();
                     final String xmlId = documentElement.getAttributeValue(new QName("id"));
